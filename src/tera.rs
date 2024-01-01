@@ -1,7 +1,11 @@
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap};
 
 use crate::Localizer;
-use fluent::FluentArgs;
+use fluent::{
+    types::{FluentNumber, FluentNumberOptions},
+    FluentArgs, FluentValue,
+};
+use serde_json::Value;
 use unic_langid::LanguageIdentifier;
 
 impl tera::Function for Localizer {
@@ -23,7 +27,10 @@ impl tera::Function for Localizer {
 
         let msg = bundle
             .get_message(ftl_key)
-            .ok_or(tera::Error::msg("FTL key not in locale"))?;
+            .ok_or(tera::Error::msg(&format!(
+                "FTL key not in locale: {}",
+                ftl_key
+            )))?;
         let pattern = msg
             .value()
             .ok_or(tera::Error::msg("No value in fluent message"))?;
@@ -31,7 +38,26 @@ impl tera::Function for Localizer {
         let fluent_args: FluentArgs = args
             .iter()
             .filter(|(key, _)| key.as_str() != "lang" && key.as_str() != "key")
-            .filter_map(|(key, val)| val.as_str().map(|val| (key, val)))
+            .map(|(key, val)| {
+                (
+                    key,
+                    match val {
+                        Value::String(s) => FluentValue::String(Cow::Borrowed(s)),
+                        Value::Number(n) => {
+                            let n_s = n.to_string();
+                            match n.as_f64() {
+                                Some(f64_n) => {
+                                    let f_n =
+                                        FluentNumber::new(f64_n, FluentNumberOptions::default());
+                                    FluentValue::Number(f_n)
+                                }
+                                None => FluentValue::String(Cow::Owned(n_s)),
+                            }
+                        }
+                        _ => FluentValue::from(val.to_string()),
+                    },
+                )
+            })
             .collect();
 
         let mut errs = Vec::new();
