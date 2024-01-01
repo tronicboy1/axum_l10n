@@ -1,6 +1,6 @@
 use std::{future::Future, pin::Pin};
 
-use http::{HeaderMap, Request, Response, Uri};
+use http::{HeaderMap, Request, Response, StatusCode, Uri};
 use tower::{Layer, Service};
 use unic_langid::LanguageIdentifier;
 
@@ -100,15 +100,16 @@ impl<S> LanguageIdentifierExtractor<S> {
     }
 }
 
-impl<S, B, C> Service<Request<B>> for LanguageIdentifierExtractor<S>
+impl<S, B> Service<Request<B>> for LanguageIdentifierExtractor<S>
 where
-    S: Service<Request<B>, Response = Response<C>>,
+    S: Service<Request<B>, Response = axum::response::Response> + Send + 'static + Clone,
     S::Future: Send + 'static,
+    B: Send + 'static,
 {
     type Error = S::Error;
     type Future =
         Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
-    type Response = Response<C>;
+    type Response = axum::response::Response;
 
     /// No back pressure needed
     fn poll_ready(
@@ -121,12 +122,9 @@ where
     fn call(&mut self, mut req: Request<B>) -> Self::Future {
         let headers = req.headers();
 
-        let lang_ident_from_uri = self.lang_code_from_uri(req.uri());
-        let ident_from_headers = self.lang_code_from_headers(headers);
-
-        let lang_ident = match lang_ident_from_uri {
-            Some(ident) => Some(ident),
-            None => ident_from_headers,
+        let lang_ident = match &self.redirect_mode {
+            RedirectMode::NoRedirect => self.lang_code_from_headers(headers),
+            RedirectMode::RedirectToSubPath => self.lang_code_from_uri(req.uri()),
         };
 
         match &self.redirect_mode {
@@ -140,7 +138,31 @@ where
 
                 Box::pin(self.inner.call(req))
             }
-            &RedirectMode::RedirectToSubPath => Box::pin(self.inner.call(req)),
+            &RedirectMode::RedirectToSubPath => {
+                if let Some(ident) = lang_ident {
+                    req.extensions_mut().insert(ident);
+
+                    Box::pin(self.inner.call(req))
+                } else {
+                    let mut new_path = String::from("/");
+
+                    if let Some(preferred_ident) = self.lang_code_from_headers(req.headers()) {
+                        new_path.push_str(preferred_ident.language.to_string().as_str());
+                    } else {
+                        new_path.push_str(self.default_lang.language.to_string().as_str());
+                    }
+
+                    new_path.push_str(req.uri().path());
+
+                    let response = Response::builder()
+                        .status(StatusCode::FOUND)
+                        .header("Location", new_path)
+                        .body(axum::body::Body::empty())
+                        .expect("Valid response");
+
+                    Box::pin(async move { Ok(response) })
+                }
+            }
         }
     }
 }
