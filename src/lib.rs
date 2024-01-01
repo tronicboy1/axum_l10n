@@ -4,6 +4,13 @@ use http::{HeaderMap, Request, Response, StatusCode, Uri};
 use tower::{Layer, Service};
 use unic_langid::LanguageIdentifier;
 
+#[cfg(feature = "fluent")]
+mod fluent;
+pub use fluent::Localizer;
+
+#[cfg(feature = "tera")]
+mod tera;
+
 /// The redirect mode for the service.
 #[derive(Debug, Clone)]
 pub enum RedirectMode {
