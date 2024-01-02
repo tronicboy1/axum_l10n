@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Debug, path::Path};
 
-use fluent::{bundle::FluentBundle, FluentResource};
+use fluent::{bundle::FluentBundle, types::FluentNumberOptions, FluentResource};
 use unic_langid::LanguageIdentifier;
 
 pub type Bundle = FluentBundle<FluentResource, intl_memoizer::concurrent::IntlLangMemoizer>;
@@ -9,6 +9,7 @@ pub type Locales = HashMap<LanguageIdentifier, Bundle>;
 
 pub struct Localizer {
     locales: Locales,
+    number_options: FluentNumberOptions,
 }
 
 #[derive(Debug)]
@@ -34,7 +35,21 @@ impl Localizer {
     pub fn new() -> Self {
         let locales = HashMap::new();
 
-        Self { locales }
+        Self {
+            locales,
+            number_options: FluentNumberOptions::default(),
+        }
+    }
+
+    /// Set fluent number conversion options
+    pub fn set_fluent_number_options(mut self, number_options: FluentNumberOptions) -> Self {
+        self.number_options = number_options;
+
+        self
+    }
+
+    pub fn number_options(&self) -> &FluentNumberOptions {
+        &self.number_options
     }
 
     /// Adds a bundle to the localizer including all the FTL files given by their file paths
