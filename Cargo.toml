@@ -1,10 +1,10 @@
 [package]
-name = "axum_l18n"
+name = "axum_l10n"
 version = "0.1.1"
 edition = "2021"
 authors = ["tronicboy1"]
 description = "A crate with localization utilities for Axum"
-repository = "https://github.com/tronicboy1/axum_l18n"
+repository = "https://github.com/tronicboy1/axum_l10n"
 license = "MIT OR Apache-2.0"
 keywords = ["axum", "localization", "i18n", "l10n"]
 
