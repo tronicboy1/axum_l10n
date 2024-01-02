@@ -4,7 +4,7 @@ version = "0.1.1"
 edition = "2021"
 authors = ["tronicboy1"]
 description = "A crate with localization utilities for Axum"
-repository = "https://github.com/tronicboy1/tower_l18n"
+repository = "https://github.com/tronicboy1/axum_l18n"
 license = "MIT OR Apache-2.0"
 keywords = ["axum", "localization", "i18n", "l10n"]
 
