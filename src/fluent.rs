@@ -75,7 +75,10 @@ impl Localizer {
             })?;
 
             bundle.add_resource(ftl).map_err(|err| {
-                LocalizerError::new(format!("Unable to add resource: {:?}", path))
+                LocalizerError::new(format!(
+                    "Unable to add resource: {:?} from error(s): {:?}",
+                    path, err
+                ))
             })?;
         }
 
