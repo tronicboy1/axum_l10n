@@ -6,6 +6,7 @@ use unic_langid::LanguageIdentifier;
 
 #[cfg(feature = "fluent")]
 mod fluent;
+#[cfg(feature = "fluent")]
 pub use fluent::Localizer;
 
 #[cfg(feature = "tera")]
@@ -16,8 +17,10 @@ mod tera;
 pub enum RedirectMode {
     /// Does not redirect, only adds the found locale from header
     NoRedirect,
+    /// Redirects to sub-path (/<lang>-<region>/*) if in list of supported Languages
+    RedirectToFullLocaleSubPath,
     /// Redirects to sub-path (/<lang>/*) if in list of supported Languages
-    RedirectToSubPath,
+    RedirectToLanguageSubPath,
 }
 
 #[derive(Debug, Clone)]
@@ -131,7 +134,9 @@ where
 
         let lang_ident = match &self.redirect_mode {
             RedirectMode::NoRedirect => self.lang_code_from_headers(headers),
-            RedirectMode::RedirectToSubPath => self.lang_code_from_uri(req.uri()),
+            RedirectMode::RedirectToLanguageSubPath | RedirectMode::RedirectToFullLocaleSubPath => {
+                self.lang_code_from_uri(req.uri())
+            }
         };
 
         match &self.redirect_mode {
@@ -145,7 +150,7 @@ where
 
                 Box::pin(self.inner.call(req))
             }
-            &RedirectMode::RedirectToSubPath => {
+            RedirectMode::RedirectToFullLocaleSubPath | RedirectMode::RedirectToLanguageSubPath => {
                 if let Some(ident) = lang_ident {
                     req.extensions_mut().insert(ident);
 
@@ -153,12 +158,19 @@ where
                 } else {
                     let mut new_path = String::from("/");
 
-                    if let Some(preferred_ident) = self.lang_code_from_headers(req.headers()) {
-                        new_path.push_str(preferred_ident.language.to_string().as_str());
-                    } else {
-                        new_path.push_str(self.default_lang.language.to_string().as_str());
-                    }
+                    let ident =
+                        if let Some(preferred_ident) = self.lang_code_from_headers(req.headers()) {
+                            preferred_ident
+                        } else {
+                            self.default_lang.clone()
+                        };
+                    let ident_string = match self.redirect_mode {
+                        RedirectMode::RedirectToFullLocaleSubPath => ident.to_string(),
+                        RedirectMode::RedirectToLanguageSubPath => ident.language.to_string(),
+                        _ => unreachable!(),
+                    };
 
+                    new_path.push_str(&ident_string);
                     new_path.push_str(req.uri().path());
 
                     let response = Response::builder()
