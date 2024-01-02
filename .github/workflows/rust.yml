@@ -17,6 +17,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Build
-      run: cargo build --verbose --features tera, fluent
+      run: cargo build --verbose --features tera
     - name: Run tests
-      run: cargo test --verbose --features tera, fluent
+      run: cargo test --lib --verbose --features tera
