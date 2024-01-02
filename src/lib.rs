@@ -18,8 +18,10 @@ pub enum RedirectMode {
     /// Does not redirect, only adds the found locale from header
     NoRedirect,
     /// Redirects to sub-path (/<lang>-<region>/*) if in list of supported Languages
+    /// Ex. localhost:3000/lists -> localhost:3000/en-US/lists
     RedirectToFullLocaleSubPath,
     /// Redirects to sub-path (/<lang>/*) if in list of supported Languages
+    /// Ex. localhost:3000/lists -> localhost:3000/en/lists
     RedirectToLanguageSubPath,
 }
 
