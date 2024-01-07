@@ -31,6 +31,7 @@ pub struct LanguageIdentifierExtractor<S> {
     default_lang: LanguageIdentifier,
     supported_langs: Vec<LanguageIdentifier>,
     redirect_mode: RedirectMode,
+    excluded_paths: Vec<String>,
 }
 
 impl<S> LanguageIdentifierExtractor<S> {
@@ -44,12 +45,24 @@ impl<S> LanguageIdentifierExtractor<S> {
             default_lang: default_lang.to_owned(),
             redirect_mode: RedirectMode::NoRedirect,
             supported_langs: supported_langs.to_owned(),
+            excluded_paths: Vec::new(),
         }
     }
 
     /// Change redirect settings of service
     pub fn redirect(mut self, redirect_mode: RedirectMode) -> Self {
         self.redirect_mode = redirect_mode;
+
+        self
+    }
+
+    /// Exclude paths from redirect when in Redirect mode
+    /// Must use paths that start with `/`.
+    pub fn excluded_paths(mut self, paths_to_exclude: &[&str]) -> Self {
+        self.excluded_paths = paths_to_exclude
+            .into_iter()
+            .map(|v| v.to_string())
+            .collect();
 
         self
     }
@@ -158,6 +171,12 @@ where
 
                     Box::pin(self.inner.call(req))
                 } else {
+                    // Do not redirect if in excluded paths
+                    let path = req.uri().path();
+                    if self.excluded_paths.iter().any(|excluded| path.starts_with(excluded)) {
+                        return Box::pin(self.inner.call(req));
+                    }
+
                     let mut new_path = String::from("/");
 
                     let ident =
@@ -218,6 +237,7 @@ impl<S> Layer<S> for LanguageIdentifierExtractorLayer {
             default_lang: self.default_lang.clone(),
             supported_langs: self.supported_langs.clone(),
             redirect_mode: self.redirect_mode.clone(),
+            excluded_paths: Vec::new(),
         }
     }
 }
