@@ -34,6 +34,28 @@ pub struct LanguageIdentifierExtractor<S> {
     excluded_paths: Vec<String>,
 }
 
+macro_rules! builder_funcs {
+    () => {
+        /// Change redirect settings of service
+        pub fn redirect(mut self, redirect_mode: RedirectMode) -> Self {
+            self.redirect_mode = redirect_mode;
+
+            self
+        }
+
+        /// Exclude paths from redirect when in Redirect mode
+        /// Must use paths that start with `/`.
+        pub fn excluded_paths(mut self, paths_to_exclude: &[&str]) -> Self {
+            self.excluded_paths = paths_to_exclude
+                .into_iter()
+                .map(|v| v.to_string())
+                .collect();
+
+            self
+        }
+    };
+}
+
 impl<S> LanguageIdentifierExtractor<S> {
     pub fn new(
         inner: S,
@@ -49,23 +71,7 @@ impl<S> LanguageIdentifierExtractor<S> {
         }
     }
 
-    /// Change redirect settings of service
-    pub fn redirect(mut self, redirect_mode: RedirectMode) -> Self {
-        self.redirect_mode = redirect_mode;
-
-        self
-    }
-
-    /// Exclude paths from redirect when in Redirect mode
-    /// Must use paths that start with `/`.
-    pub fn excluded_paths(mut self, paths_to_exclude: &[&str]) -> Self {
-        self.excluded_paths = paths_to_exclude
-            .into_iter()
-            .map(|v| v.to_string())
-            .collect();
-
-        self
-    }
+    builder_funcs!();
 
     /// Unwraps the path and extracts language identifier if available.
     /// Returns None if the LanguageIdentifier is not supported
@@ -173,7 +179,11 @@ where
                 } else {
                     // Do not redirect if in excluded paths
                     let path = req.uri().path();
-                    if self.excluded_paths.iter().any(|excluded| path.starts_with(excluded)) {
+                    if self
+                        .excluded_paths
+                        .iter()
+                        .any(|excluded| path.starts_with(excluded))
+                    {
                         return Box::pin(self.inner.call(req));
                     }
 
@@ -212,6 +222,7 @@ pub struct LanguageIdentifierExtractorLayer {
     default_lang: LanguageIdentifier,
     supported_langs: Vec<LanguageIdentifier>,
     redirect_mode: RedirectMode,
+    excluded_paths: Vec<String>,
 }
 
 impl LanguageIdentifierExtractorLayer {
@@ -224,8 +235,11 @@ impl LanguageIdentifierExtractorLayer {
             default_lang,
             supported_langs,
             redirect_mode,
+            excluded_paths: Vec::new(),
         }
     }
+
+    builder_funcs!();
 }
 
 impl<S> Layer<S> for LanguageIdentifierExtractorLayer {
