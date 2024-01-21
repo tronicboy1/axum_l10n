@@ -1,6 +1,6 @@
 use std::{future::Future, pin::Pin};
 
-use http::{HeaderMap, Request, Response, StatusCode, Uri};
+use http::{HeaderMap, Response, StatusCode, Uri};
 use tower::{Layer, Service};
 use unic_langid::LanguageIdentifier;
 
@@ -45,6 +45,15 @@ macro_rules! builder_funcs {
 
         /// Exclude paths from redirect when in Redirect mode
         /// Must use paths that start with `/`.
+        ///
+        /// # Example
+        /// ```ignore
+        /// let layer = axum_l10n::LanguageIdentifierExtractorLayer::new(
+        ///     ENGLISH,
+        ///     vec![ENGLISH, JAPANESE],
+        ///     axum_l10n::RedirectMode::RedirectToLanguageSubPath,
+        /// ).excluded_paths(&["/.well-known", ])
+        /// ```
         pub fn excluded_paths(mut self, paths_to_exclude: &[&str]) -> Self {
             self.excluded_paths = paths_to_exclude
                 .into_iter()
@@ -129,11 +138,29 @@ impl<S> LanguageIdentifierExtractor<S> {
             .find(|ident| ident.language == path_ident.language)
             .is_some()
     }
+
+    // Rewrites uri without the language code
+    fn rewrite_uri(
+        &self,
+        uri: &mut http::Uri,
+        ident: &LanguageIdentifier,
+    ) -> Result<(), http::uri::InvalidUri> {
+        let lang_code = match &self.redirect_mode {
+            RedirectMode::RedirectToFullLocaleSubPath => ident.to_string(),
+            RedirectMode::RedirectToLanguageSubPath => ident.language.to_string(),
+            RedirectMode::NoRedirect => unreachable!(),
+        };
+
+        let new_uri = uri.to_string().replace(&format!("/{}", lang_code), "");
+        *uri = http::Uri::try_from(new_uri)?;
+
+        Ok(())
+    }
 }
 
-impl<S, B> Service<Request<B>> for LanguageIdentifierExtractor<S>
+impl<S, B> Service<http::Request<B>> for LanguageIdentifierExtractor<S>
 where
-    S: Service<Request<B>, Response = axum::response::Response> + Send + 'static + Clone,
+    S: Service<http::Request<B>, Response = axum::response::Response> + Send + 'static + Clone,
     S::Future: Send + 'static,
     B: Send + 'static,
 {
@@ -150,7 +177,7 @@ where
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, mut req: Request<B>) -> Self::Future {
+    fn call(&mut self, mut req: http::Request<B>) -> Self::Future {
         let headers = req.headers();
 
         let lang_ident = match &self.redirect_mode {
@@ -173,6 +200,10 @@ where
             }
             RedirectMode::RedirectToFullLocaleSubPath | RedirectMode::RedirectToLanguageSubPath => {
                 if let Some(ident) = lang_ident {
+                    // Remove lang code from path for matching in axum
+                    let uri = req.uri_mut();
+                    self.rewrite_uri(uri, &ident).expect("invalid url");
+
                     req.extensions_mut().insert(ident);
 
                     Box::pin(self.inner.call(req))
@@ -251,13 +282,15 @@ impl<S> Layer<S> for LanguageIdentifierExtractorLayer {
             default_lang: self.default_lang.clone(),
             supported_langs: self.supported_langs.clone(),
             redirect_mode: self.redirect_mode.clone(),
-            excluded_paths: Vec::new(),
+            excluded_paths: self.excluded_paths.clone(),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use http::HeaderValue;
     use unic_langid::langid;
 
@@ -271,6 +304,34 @@ mod tests {
     fn get_serv() -> LanguageIdentifierExtractor<DummyInner> {
         let supported = vec![ENGLISH, JAPANESE];
         LanguageIdentifierExtractor::new(DummyInner, &supported, &ENGLISH)
+    }
+
+    #[test]
+    fn can_rewrite_uri_full() {
+        let mut uri = "http://localhost:3000/en-US/lists".parse::<Uri>().unwrap();
+
+        let mut service = get_serv();
+        service.redirect_mode = RedirectMode::RedirectToFullLocaleSubPath;
+
+        let ident = LanguageIdentifier::from_str("en-US").unwrap();
+
+        service.rewrite_uri(&mut uri, &ident).unwrap();
+
+        assert_eq!("http://localhost:3000/lists", uri.to_string().as_str());
+    }
+
+    #[test]
+    fn can_rewrite_uri_lang_only() {
+        let mut uri = "http://localhost:3000/en/lists".parse::<Uri>().unwrap();
+
+        let mut service = get_serv();
+        service.redirect_mode = RedirectMode::RedirectToLanguageSubPath;
+
+        let ident = LanguageIdentifier::from_str("en-US").unwrap();
+
+        service.rewrite_uri(&mut uri, &ident).unwrap();
+
+        assert_eq!("http://localhost:3000/lists", uri.to_string().as_str());
     }
 
     #[test]

@@ -27,6 +27,9 @@ let router = axum::Router::new()
       ));
 ```
 
+For `RedirectMode::RedirectToFullLocaleSubPath` or `RedirectMode::RedirectToLanguageSubPath`, you must wrap this service/middleware around the entire
+axum app, as explained [here](https://docs.rs/axum/latest/axum/middleware/index.html#rewriting-request-uri-in-middleware).
+
 # Features
 
 ## fluent
