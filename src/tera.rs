@@ -21,9 +21,9 @@ impl tera::Function for Localizer {
             .and_then(|key| key.as_str())
             .ok_or(tera::Error::msg("missing ftl key"))?;
 
-        let bundle = self
-            .get_locale(&lang_arg)
-            .ok_or(tera::Error::msg("locale not registered"))?;
+        let bundle = self.get_locale(&lang_arg).ok_or(tera::Error::msg(format!(
+            "locale not registered: {lang_arg}"
+        )))?;
 
         let msg = bundle
             .get_message(ftl_key)
