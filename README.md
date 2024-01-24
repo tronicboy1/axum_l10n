@@ -30,6 +30,17 @@ let router = axum::Router::new()
 For `RedirectMode::RedirectToFullLocaleSubPath` or `RedirectMode::RedirectToLanguageSubPath`, you must wrap this service/middleware around the entire
 axum app, as explained [here](https://docs.rs/axum/latest/axum/middleware/index.html#rewriting-request-uri-in-middleware).
 
+When using the subpath redirect modes, you may want to exclude some folders from the redirect as below:
+
+```rust
+let l10n_middleware = axum_l10n::LanguageIdentifierExtractorLayer::new(
+        JAPANESE,
+        vec![JAPANESE, ENGLISH],
+        axum_l10n::RedirectMode::RedirectToLanguageSubPath,
+    )
+    .excluded_paths(&["/api", "/assets", "/auth"]);
+```
+
 # Features
 
 ## fluent
