@@ -151,7 +151,9 @@ impl<S> LanguageIdentifierExtractor<S> {
             RedirectMode::NoRedirect => unreachable!(),
         };
 
-        let new_uri = uri.to_string().replace(&format!("/{}", lang_code), "");
+        let new_uri = uri
+            .to_string()
+            .replacen(&format!("/{}/", lang_code), "/", 1);
         *uri = http::Uri::try_from(new_uri)?;
 
         Ok(())
@@ -332,6 +334,25 @@ mod tests {
         service.rewrite_uri(&mut uri, &ident).unwrap();
 
         assert_eq!("http://localhost:3000/lists", uri.to_string().as_str());
+    }
+
+    #[test]
+    fn can_rewrite_uri_same_starting_text() {
+        let mut uri = "http://localhost:3000/en/enrollment/details"
+            .parse::<Uri>()
+            .unwrap();
+
+        let mut service = get_serv();
+        service.redirect_mode = RedirectMode::RedirectToLanguageSubPath;
+
+        let ident = LanguageIdentifier::from_str("en-US").unwrap();
+
+        service.rewrite_uri(&mut uri, &ident).unwrap();
+
+        assert_eq!(
+            "http://localhost:3000/enrollment/details",
+            uri.to_string().as_str()
+        );
     }
 
     #[test]
