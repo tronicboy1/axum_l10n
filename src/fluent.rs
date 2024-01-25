@@ -93,15 +93,24 @@ impl Localizer {
         let full_locale_match = self.locales.get(&*locale);
 
         // Try to match only on the language if full match not found
-        if full_locale_match.is_some() {
-            full_locale_match
-        } else {
-            if let Some(key) = self.locales.keys().find(|k| k.language == locale.language) {
-                self.locales.get(key)
-            } else {
-                None
-            }
+        match full_locale_match {
+            Some(l) => Some(l),
+            None => self
+                .locales
+                .keys()
+                .find(|k| k.language == locale.language)
+                .and_then(|key| self.locales.get(key)),
         }
+    }
+
+    pub fn iter(&self) -> std::collections::hash_map::Iter<LanguageIdentifier, Bundle> {
+        self.locales.iter()
+    }
+
+    /// Use to iter all registered bundles and add functions or other
+    /// customizations.
+    pub fn iter_mut(&mut self) -> std::collections::hash_map::IterMut<LanguageIdentifier, Bundle> {
+        self.locales.iter_mut()
     }
 }
 
