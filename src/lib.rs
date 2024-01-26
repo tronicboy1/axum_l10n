@@ -158,6 +158,31 @@ impl<S> LanguageIdentifierExtractor<S> {
 
         Ok(())
     }
+
+    fn build_redirect_path<B>(&self, req: &http::Request<B>) -> String {
+        let mut new_path = String::from("/");
+
+        let ident = if let Some(preferred_ident) = self.lang_code_from_headers(req.headers()) {
+            preferred_ident
+        } else {
+            self.default_lang.clone()
+        };
+        let ident_string = match self.redirect_mode {
+            RedirectMode::RedirectToFullLocaleSubPath => ident.to_string(),
+            RedirectMode::RedirectToLanguageSubPath => ident.language.to_string(),
+            _ => unreachable!(),
+        };
+
+        new_path.push_str(&ident_string);
+        new_path.push_str(req.uri().path());
+
+        if let Some(q) = req.uri().query() {
+            new_path.push_str("?");
+            new_path.push_str(q);
+        }
+
+        new_path
+    }
 }
 
 impl<S, B> Service<http::Request<B>> for LanguageIdentifierExtractor<S>
@@ -220,22 +245,7 @@ where
                         return Box::pin(self.inner.call(req));
                     }
 
-                    let mut new_path = String::from("/");
-
-                    let ident =
-                        if let Some(preferred_ident) = self.lang_code_from_headers(req.headers()) {
-                            preferred_ident
-                        } else {
-                            self.default_lang.clone()
-                        };
-                    let ident_string = match self.redirect_mode {
-                        RedirectMode::RedirectToFullLocaleSubPath => ident.to_string(),
-                        RedirectMode::RedirectToLanguageSubPath => ident.language.to_string(),
-                        _ => unreachable!(),
-                    };
-
-                    new_path.push_str(&ident_string);
-                    new_path.push_str(req.uri().path());
+                    let new_path = self.build_redirect_path(&req);
 
                     let response = Response::builder()
                         .status(StatusCode::FOUND)
@@ -353,6 +363,39 @@ mod tests {
             "http://localhost:3000/enrollment/details",
             uri.to_string().as_str()
         );
+    }
+
+    #[test]
+    fn can_rewrite_uri_with_query_params() {
+        let mut uri = "http://localhost:3000/en/?page=1".parse::<Uri>().unwrap();
+
+        let mut service = get_serv();
+        service.redirect_mode = RedirectMode::RedirectToLanguageSubPath;
+
+        let ident = LanguageIdentifier::from_str("en-US").unwrap();
+
+        service.rewrite_uri(&mut uri, &ident).unwrap();
+
+        assert_eq!("http://localhost:3000/?page=1", uri.to_string().as_str());
+    }
+
+    #[test]
+    fn can_redirect_with_query_params() {
+        let uri = "http://localhost:3000/?page=1".parse::<Uri>().unwrap();
+        let req = http::Request::builder()
+            .uri(uri)
+            .header("Accept-Language", "en-US,en;q=0.5")
+            .body(())
+            .unwrap();
+
+        let mut service = get_serv();
+        service.redirect_mode = RedirectMode::RedirectToLanguageSubPath;
+
+        let ident = LanguageIdentifier::from_str("en-US").unwrap();
+
+        let new_path = service.build_redirect_path(&req);
+
+        assert_eq!("/en/?page=1", new_path.as_str());
     }
 
     #[test]
