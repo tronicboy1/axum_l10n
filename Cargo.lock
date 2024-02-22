@@ -92,7 +92,7 @@ dependencies = [
 
 [[package]]
 name = "axum_l10n"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "axum",
  "fluent",

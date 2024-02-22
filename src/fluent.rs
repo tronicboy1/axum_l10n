@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Debug, path::Path};
 
-use fluent::{bundle::FluentBundle, types::FluentNumberOptions, FluentResource};
+use fluent::{bundle::FluentBundle, types::FluentNumberOptions, FluentArgs, FluentResource};
 use unic_langid::LanguageIdentifier;
 
 pub type Bundle = FluentBundle<FluentResource, intl_memoizer::concurrent::IntlLangMemoizer>;
@@ -103,6 +103,38 @@ impl Localizer {
         }
     }
 
+    /// Format a FTL message into target locale if available.<br>
+    /// See Fluent RS [FluentBundle::format_pattern documentation](https://docs.rs/fluent/latest/fluent/bundle/struct.FluentBundle.html#method.format_pattern)
+    /// for details
+    ///
+    /// Fluent template errors are printed to stdout.
+    pub fn format_message(
+        &self,
+        locale: &LanguageIdentifier,
+        key: &str,
+        args: Option<FluentArgs>,
+    ) -> Option<String> {
+        let bundle = self.get_locale(locale)?;
+
+        let message = bundle.get_message(key)?;
+
+        let pattern = message.value()?;
+
+        let mut errors = Vec::new();
+
+        let message = bundle
+            .format_pattern(pattern, args.as_ref(), &mut errors)
+            .to_string();
+
+        if errors.len() > 0 {
+            for err in errors {
+                println!("{}", err.to_string());
+            }
+        }
+
+        Some(message)
+    }
+
     pub fn iter(&self) -> std::collections::hash_map::Iter<LanguageIdentifier, Bundle> {
         self.locales.iter()
     }
@@ -151,5 +183,22 @@ mod tests {
         let bundle = loc.get_locale(&langid!("en-US"));
 
         assert!(bundle.is_some());
+    }
+
+    #[test]
+    fn can_format_pattern() {
+        let mut loc = Localizer::new();
+        loc.add_bundle(ENGLISH, &[MAIN, SUB]).unwrap();
+
+        let message = loc.format_message(&ENGLISH, "test-key-a", None);
+
+        assert_eq!(Some(String::from("Hello World")), message);
+
+        let mut args = fluent::FluentArgs::new();
+        args.set("name", "Deadpool");
+
+        let message = loc.format_message(&ENGLISH, "test-name", Some(args));
+
+        assert_eq!(Some(String::from("Peg \u{2068}Deadpool\u{2069}")), message);
     }
 }

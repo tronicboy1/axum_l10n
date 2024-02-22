@@ -20,10 +20,10 @@ let router = axum::Router::new()
         async move {
           Html(format!("Your language is: {}", lang.to_string()))
         }))
-      .layer(axum_l18n::LanguageIdentifierExtractorLayer::new(
+      .layer(axum_l10n::LanguageIdentifierExtractorLayer::new(
           ENGLISH,
           vec![ENGLISH, JAPANESE],
-          axum_l18n::RedirectMode::NoRedirect,
+          axum_l10n::RedirectMode::NoRedirect,
       ));
 ```
 
@@ -53,7 +53,7 @@ See [fluent-rs](https://github.com/projectfluent/fluent-rs) for details about fl
 
 ```rust
 use unic_langid::{langid, LanguageIdentifier};
-use axum_l18n::Localizer;
+use axum_l10n::Localizer;
 
 pub const ENGLISH: LanguageIdentifier = langid!("en");
 pub const JAPANESE: LanguageIdentifier = langid!("ja");
@@ -65,6 +65,10 @@ localizer
 localizer
     .add_bundle(ENGLISH, &["locales/en/main.ftl", "locales/en/login.ftl"])
     .unwrap();
+
+let message = localizer.format_message(&ENGLISH, "test-key-a", None);
+
+assert_eq!(Some(String::from("Hello World")), message);
 ```
 
 ## tera
