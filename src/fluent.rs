@@ -12,6 +12,20 @@ pub struct Localizer {
     number_options: FluentNumberOptions,
 }
 
+impl std::fmt::Debug for Localizer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Localizer - {}",
+            self.locales
+                .keys()
+                .map(|k| k.to_string())
+                .collect::<Vec<String>>()
+                .join(", ")
+        )
+    }
+}
+
 #[derive(Debug)]
 pub struct LocalizerError {
     cause: String,
