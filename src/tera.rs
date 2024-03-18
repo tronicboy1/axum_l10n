@@ -37,7 +37,7 @@ impl tera::Function for Localizer {
 
         let fluent_args: FluentArgs = args
             .iter()
-            .filter(|(key, _)| key.as_str() != "lang" && key.as_str() != "key")
+            .filter(|(key, _)| key.as_str() != "key")
             .map(|(key, val)| (key, json_value_to_fluent_value(val, self.number_options())))
             .collect();
 
