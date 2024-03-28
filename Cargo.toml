@@ -1,6 +1,6 @@
 [package]
 name = "axum_l10n"
-version = "0.2.7"
+version = "0.2.8"
 edition = "2021"
 authors = ["tronicboy1"]
 description = "A crate with localization utilities for Axum"
@@ -16,12 +16,12 @@ tera = ["fluent", "dep:tera", "serde", "serde_json"]
 fluent = ["dep:fluent", "intl-memoizer"]
 
 [dependencies]
-axum = { version = "0.7.3", default-features = false }
-fluent = { version = "0.16.0", optional = true }
-http = "1.0.0"
-intl-memoizer = { version = "0.5.1", optional = true }
-serde = { version = "1.0.193", optional = true }
-serde_json = { version = "1.0.109", optional = true }
-tera = { version = "1.19.1", optional = true }
-tower = "0.4.13"
-unic-langid = { version = "0.9.4", features = ["serde", "unic-langid-macros"] }
+axum = { version = "0.7", default-features = false }
+fluent = { version = "0.16", optional = true }
+http = "1.0"
+intl-memoizer = { version = "0.5", optional = true }
+serde = { version = "1.0", optional = true }
+serde_json = { version = "1.0", optional = true }
+tera = { version = "1.19", optional = true }
+tower = "0.4"
+unic-langid = { version = "0.9", features = ["serde", "unic-langid-macros"] }

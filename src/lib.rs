@@ -32,15 +32,17 @@ pub struct LanguageIdentifierExtractor<S> {
     supported_langs: Vec<LanguageIdentifier>,
     redirect_mode: RedirectMode,
     excluded_paths: Vec<String>,
+    redirect_default_as_301: bool,
 }
 
 macro_rules! builder_funcs {
     () => {
         /// Change redirect settings of service
-        pub fn redirect(mut self, redirect_mode: RedirectMode) -> Self {
-            self.redirect_mode = redirect_mode;
-
-            self
+        pub fn redirect(self, redirect_mode: RedirectMode) -> Self {
+            Self {
+                redirect_mode: redirect_mode,
+                ..self
+            }
         }
 
         /// Exclude paths from redirect when in Redirect mode
@@ -54,13 +56,23 @@ macro_rules! builder_funcs {
         ///     axum_l10n::RedirectMode::RedirectToLanguageSubPath,
         /// ).excluded_paths(&["/.well-known", ])
         /// ```
-        pub fn excluded_paths(mut self, paths_to_exclude: &[&str]) -> Self {
-            self.excluded_paths = paths_to_exclude
-                .into_iter()
-                .map(|v| v.to_string())
-                .collect();
+        pub fn excluded_paths(self, paths_to_exclude: &[&str]) -> Self {
+            Self {
+                excluded_paths: paths_to_exclude
+                    .into_iter()
+                    .map(|v| v.to_string())
+                    .collect(),
+                ..self
+            }
+        }
 
-            self
+        /// Sets a redirect from the root domain to default locale as 301 (permanently moved).<br>
+        /// Intended for websites introducing localization after initial release.
+        pub fn redirect_default_as_301(self) -> Self {
+            Self {
+                redirect_default_as_301: true,
+                ..self
+            }
         }
     };
 }
@@ -77,6 +89,7 @@ impl<S> LanguageIdentifierExtractor<S> {
             redirect_mode: RedirectMode::NoRedirect,
             supported_langs: supported_langs.to_owned(),
             excluded_paths: Vec::new(),
+            redirect_default_as_301: false,
         }
     }
 
@@ -159,7 +172,7 @@ impl<S> LanguageIdentifierExtractor<S> {
         Ok(())
     }
 
-    fn build_redirect_path<B>(&self, req: &http::Request<B>) -> String {
+    fn build_redirect_path<B>(&self, req: &http::Request<B>) -> (String, LanguageIdentifier) {
         let mut new_path = String::from("/");
 
         let ident = if let Some(preferred_ident) = self.lang_code_from_headers(req.headers()) {
@@ -181,7 +194,7 @@ impl<S> LanguageIdentifierExtractor<S> {
             new_path.push_str(q);
         }
 
-        new_path
+        (new_path, ident)
     }
 }
 
@@ -245,10 +258,21 @@ where
                         return Box::pin(self.inner.call(req));
                     }
 
-                    let new_path = self.build_redirect_path(&req);
+                    let (new_path, ident) = self.build_redirect_path(&req);
 
                     let response = Response::builder()
-                        .status(StatusCode::FOUND)
+                        .status(
+                            // Send 301 if the redirect is for the base page and the redirect
+                            // is to the page marked as the default language
+                            if self.redirect_default_as_301
+                                && path == "/"
+                                && ident.language == self.default_lang.language
+                            {
+                                StatusCode::MOVED_PERMANENTLY
+                            } else {
+                                StatusCode::FOUND
+                            },
+                        )
                         .header("Location", new_path)
                         .body(axum::body::Body::empty())
                         .expect("Valid response");
@@ -266,6 +290,7 @@ pub struct LanguageIdentifierExtractorLayer {
     supported_langs: Vec<LanguageIdentifier>,
     redirect_mode: RedirectMode,
     excluded_paths: Vec<String>,
+    redirect_default_as_301: bool,
 }
 
 impl LanguageIdentifierExtractorLayer {
@@ -279,6 +304,7 @@ impl LanguageIdentifierExtractorLayer {
             supported_langs,
             redirect_mode,
             excluded_paths: Vec::new(),
+            redirect_default_as_301: false,
         }
     }
 
@@ -295,6 +321,7 @@ impl<S> Layer<S> for LanguageIdentifierExtractorLayer {
             supported_langs: self.supported_langs.clone(),
             redirect_mode: self.redirect_mode.clone(),
             excluded_paths: self.excluded_paths.clone(),
+            redirect_default_as_301: self.redirect_default_as_301,
         }
     }
 }
@@ -315,7 +342,7 @@ mod tests {
 
     fn get_serv() -> LanguageIdentifierExtractor<DummyInner> {
         let supported = vec![ENGLISH, JAPANESE];
-        LanguageIdentifierExtractor::new(DummyInner, &supported, &ENGLISH)
+        LanguageIdentifierExtractor::new(DummyInner, &supported, &ENGLISH).redirect_default_as_301()
     }
 
     #[test]
@@ -393,7 +420,7 @@ mod tests {
 
         let ident = LanguageIdentifier::from_str("en-US").unwrap();
 
-        let new_path = service.build_redirect_path(&req);
+        let (new_path, _) = service.build_redirect_path(&req);
 
         assert_eq!("/en/?page=1", new_path.as_str());
     }
