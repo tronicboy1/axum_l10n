@@ -9,6 +9,7 @@ pub type Locales = HashMap<LanguageIdentifier, Bundle>;
 
 pub struct Localizer {
     locales: Locales,
+    default_locale: Option<LanguageIdentifier>,
     number_options: FluentNumberOptions,
 }
 
@@ -51,6 +52,7 @@ impl Localizer {
 
         Self {
             locales,
+            default_locale: None,
             number_options: FluentNumberOptions::default(),
         }
     }
@@ -64,6 +66,11 @@ impl Localizer {
 
     pub fn number_options(&self) -> &FluentNumberOptions {
         &self.number_options
+    }
+
+    pub fn set_default_locale(mut self, locale: Option<LanguageIdentifier>) -> Self {
+        self.default_locale = locale;
+        self
     }
 
     /// Adds a bundle to the localizer including all the FTL files given by their file paths
@@ -130,7 +137,12 @@ impl Localizer {
     ) -> Option<String> {
         let bundle = self.get_locale(locale)?;
 
-        let message = bundle.get_message(key)?;
+        let message = bundle.get_message(key).or_else(|| {
+            self.default_locale
+                .as_ref()
+                .and_then(|locale| self.get_locale(locale))
+                .and_then(|bundle| bundle.get_message(key))
+        })?;
 
         let pattern = message.value()?;
 
