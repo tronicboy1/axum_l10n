@@ -67,6 +67,11 @@ impl Localizer {
     }
 
     /// Adds a bundle to the localizer including all the FTL files given by their file paths
+    ///
+    /// If subsequent files contain the same keys as previous ones, those messages will be
+    /// overwritten by the later value.
+    /// You may use this to provide "fallback" translations, followed by the actual main
+    /// translation.
     pub fn add_bundle<P>(
         &mut self,
         locale: LanguageIdentifier,
@@ -88,12 +93,7 @@ impl Localizer {
                 ))
             })?;
 
-            bundle.add_resource(ftl).map_err(|err| {
-                LocalizerError::new(format!(
-                    "Unable to add resource: {:?} from error(s): {:?}",
-                    path, err
-                ))
-            })?;
+            bundle.add_resource_overriding(ftl);
         }
 
         self.locales.insert(locale, bundle);
