@@ -122,11 +122,11 @@ impl Localizer {
     /// for details
     ///
     /// Fluent template errors are printed to stdout.
-    pub fn format_message(
+    pub fn format_message<'a>(
         &self,
         locale: &LanguageIdentifier,
         key: &str,
-        args: Option<FluentArgs>,
+        args: Option<&'a FluentArgs>,
     ) -> Option<String> {
         let bundle = self.get_locale(locale)?;
 
@@ -137,7 +137,7 @@ impl Localizer {
         let mut errors = Vec::new();
 
         let message = bundle
-            .format_pattern(pattern, args.as_ref(), &mut errors)
+            .format_pattern(pattern, args, &mut errors)
             .to_string();
 
         if errors.len() > 0 {
@@ -211,7 +211,7 @@ mod tests {
         let mut args = fluent::FluentArgs::new();
         args.set("name", "Deadpool");
 
-        let message = loc.format_message(&ENGLISH, "test-name", Some(args));
+        let message = loc.format_message(&ENGLISH, "test-name", Some(&args));
 
         assert_eq!(Some(String::from("Peg \u{2068}Deadpool\u{2069}")), message);
     }
