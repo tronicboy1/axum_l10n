@@ -21,7 +21,7 @@ impl tera::Function for Localizer {
             .and_then(|key| key.as_str())
             .ok_or(tera::Error::msg("missing ftl key"))?;
 
-        let ftl_attribute = args.get("__attribute").and_then(|attr| attr.as_str());
+        let ftl_attribute = args.get("attribute").and_then(|attr| attr.as_str());
 
         let fluent_args: FluentArgs = args
             .iter()
