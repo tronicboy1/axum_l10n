@@ -266,11 +266,47 @@ mod tests {
     }
 
     #[test]
-    fn compiles_with_string_key() {
+    fn compiles_with_borrowed_string() {
         let mut loc = Localizer::new();
         loc.add_bundle(ENGLISH, &[MAIN, SUB]).unwrap();
 
         loc.format_message(&ENGLISH, &"test-key-a".to_owned(), None);
+    }
+
+    #[test]
+    fn use_attributes() {
+        let mut loc = Localizer::new();
+        loc.add_bundle(ENGLISH, &[MAIN, SUB]).unwrap();
+
+        let message = loc
+            .format_message(
+                &ENGLISH,
+                &MessageAttribute {
+                    key: "attribute-test",
+                    attribute: "attribute_a",
+                },
+                None,
+            )
+            .expect("formatting succeeds");
+
+        assert_eq!("Hello", message)
+    }
+
+    #[test]
+    fn not_existing_attribute() {
+        let mut loc = Localizer::new();
+        loc.add_bundle(ENGLISH, &[MAIN, SUB]).unwrap();
+
+        assert!(loc
+            .format_message(
+                &ENGLISH,
+                &MessageAttribute {
+                    key: "attribute-test",
+                    attribute: "does_not_exist",
+                },
+                None,
+            )
+            .is_none());
     }
 
     #[test]
