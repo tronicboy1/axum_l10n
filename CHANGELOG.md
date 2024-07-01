@@ -19,6 +19,15 @@ straightforward as possible.
 
 ### Fixed
 
+## [0.3.1] - 2024-07-01
+
+### Added
+- ability to use [fluent attributes](https://projectfluent.org/fluent/guide/attributes.html) in tera templates.
+
+### Changed
+
+### Fixed
+
 ## [0.3.0] - 2024-06-12
 
 ### Added
