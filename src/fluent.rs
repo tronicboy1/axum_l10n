@@ -204,9 +204,9 @@ pub trait MessageKey {
     }
 }
 
-impl MessageKey for str {
+impl<S: AsRef<str> + ?Sized> MessageKey for S {
     fn key(&self) -> &str {
-        self
+        self.as_ref()
     }
 }
 
@@ -263,6 +263,14 @@ mod tests {
         let bundle = loc.get_locale(&langid!("en-US"));
 
         assert!(bundle.is_some());
+    }
+
+    #[test]
+    fn compiles_with_string_key() {
+        let mut loc = Localizer::new();
+        loc.add_bundle(ENGLISH, &[MAIN, SUB]).unwrap();
+
+        loc.format_message(&ENGLISH, &"test-key-a".to_owned(), None);
     }
 
     #[test]
