@@ -1,6 +1,6 @@
 use std::{borrow::Cow, collections::HashMap};
 
-use crate::Localizer;
+use crate::{fluent::MessageAttribute, Localizer};
 use fluent::{
     types::{FluentNumber, FluentNumberOptions},
     FluentArgs, FluentValue,
@@ -21,19 +21,7 @@ impl tera::Function for Localizer {
             .and_then(|key| key.as_str())
             .ok_or(tera::Error::msg("missing ftl key"))?;
 
-        let bundle = self.get_locale(&lang_arg).ok_or(tera::Error::msg(format!(
-            "locale not registered: {lang_arg}"
-        )))?;
-
-        let msg = bundle
-            .get_message(ftl_key)
-            .ok_or(tera::Error::msg(&format!(
-                "FTL key not in locale: {}",
-                ftl_key
-            )))?;
-        let pattern = msg
-            .value()
-            .ok_or(tera::Error::msg("No value in fluent message"))?;
+        let ftl_attribute = args.get("__attribute").and_then(|attr| attr.as_str());
 
         let fluent_args: FluentArgs = args
             .iter()
@@ -41,14 +29,21 @@ impl tera::Function for Localizer {
             .map(|(key, val)| (key, json_value_to_fluent_value(val, self.number_options())))
             .collect();
 
-        let mut errs = Vec::new();
-        let res = bundle.format_pattern(pattern, Some(&fluent_args), &mut errs);
-
-        if errs.len() > 0 {
-            dbg!(errs);
+        let message = if let Some(ftl_attribute) = ftl_attribute {
+            self.format_message_result(
+                &lang_arg,
+                &MessageAttribute {
+                    key: ftl_key,
+                    attribute: ftl_attribute,
+                },
+                Some(&fluent_args),
+            )
+        } else {
+            self.format_message_result(&lang_arg, ftl_key, Some(&fluent_args))
         }
+        .map_err(|err| tera::Error::chain("failed to format message", err))?;
 
-        Ok(serde_json::Value::String(res.into()))
+        Ok(serde_json::Value::String(message))
     }
 
     fn is_safe(&self) -> bool {
