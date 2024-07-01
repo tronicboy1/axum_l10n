@@ -210,6 +210,7 @@ impl MessageKey for str {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct MessageAttribute<'key, 'attribute> {
     pub key: &'key str,
     pub attribute: &'attribute str,
