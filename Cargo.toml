@@ -16,7 +16,7 @@ tera = ["fluent", "dep:tera", "serde", "serde_json"]
 fluent = ["dep:fluent", "intl-memoizer"]
 
 [dependencies]
-axum = { version = "0.7", default-features = false }
+axum = { version = "0.8", default-features = false }
 fluent = { version = "0.16", optional = true }
 http = "1.0"
 intl-memoizer = { version = "0.5", optional = true }
