@@ -19,6 +19,15 @@ straightforward as possible.
 
 ### Fixed
 
+## [0.5.0] - 2025-07-08
+
+### Added
+
+### Changed
+- Updates dependencies
+
+### Fixed
+
 ## [0.3.1] - 2024-07-01
 
 ### Added
