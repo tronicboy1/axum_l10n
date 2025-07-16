@@ -145,11 +145,12 @@ impl<S> LanguageIdentifierExtractor<S> {
             })
     }
 
+    // Returns if the language is supported
     fn supported(&self, path_ident: &LanguageIdentifier) -> bool {
         self.supported_langs
             .iter()
-            .find(|ident| ident.language == path_ident.language)
-            .is_some()
+            // if the vec is empty, then return true
+            .all(|ident| ident.language != path_ident.language)
     }
 
     // Rewrites uri without the language code
