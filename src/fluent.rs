@@ -179,7 +179,10 @@ impl Localizer {
         };
 
         for err in errors {
-            println!("{err}");
+            #[cfg(not(feature = "tracing"))]
+            println!("{}", err);
+            #[cfg(feature = "tracing")]
+            tracing::warn!("Fluent error: {}", err);
         }
 
         Ok(message)
