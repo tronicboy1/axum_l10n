@@ -1,6 +1,7 @@
 {
   "rust-analyzer.cargo.features": [
     "fluent",
-    "tera"
+    "tera",
+    "tracing"
   ],
 }

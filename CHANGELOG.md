@@ -19,6 +19,17 @@ straightforward as possible.
 
 ### Fixed
 
+## [0.5.1] - 2025-07-24
+
+### Added
+- Ability to use tracing for logs
+
+### Changed
+- NA
+
+### Fixed
+- NA
+
 ## [0.5.0] - 2025-07-08
 
 ### Added

@@ -43,6 +43,10 @@ let l10n_middleware = axum_l10n::LanguageIdentifierExtractorLayer::new(
 
 # Features
 
+## tracing
+
+Allows use of tracing for logs.
+
 ## fluent
 
 Enabling fluent allows you to use the fluent Localizer to add bundles for translation.
