@@ -418,7 +418,7 @@ mod tests {
         let mut service = get_serv();
         service.redirect_mode = RedirectMode::RedirectToLanguageSubPath;
 
-        let ident = LanguageIdentifier::from_str("en-US").unwrap();
+        let _ident = LanguageIdentifier::from_str("en-US").unwrap();
 
         let (new_path, _) = service.build_redirect_path(&req);
 
