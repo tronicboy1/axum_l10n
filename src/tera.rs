@@ -95,6 +95,10 @@ fn tera_value_to_fluent_value<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        fluent::tests::{MAIN, SUB},
+        tests::ENGLISH,
+    };
 
     #[test]
     fn can_convert_num_to_fluent_num() {
@@ -128,5 +132,42 @@ can be solved by finding the eigenvalues and eigenvectors of said system's matri
             tera_value_to_fluent_value(&tera_s, &FluentNumberOptions::default()),
             FluentValue::String(Cow::Borrowed(s.as_str()))
         );
+    }
+
+    #[test]
+    fn can_parse_lang_from_args() {
+        let mut loc = Localizer::new();
+        loc.add_bundle(ENGLISH, &[MAIN, SUB]).unwrap();
+
+        let mut tera = tera::Tera::new();
+
+        tera.register_function("fluent", loc);
+
+        let ctx = tera::Context::new();
+
+        let tera_r = tera
+            .render_str(r#"{{ fluent(key="test-key-a", lang="en") }}"#, &ctx, false)
+            .unwrap();
+
+        assert_eq!(tera_r, String::from("Hello World"));
+    }
+
+    #[test]
+    fn can_parse_lang_from_context() {
+        let mut loc = Localizer::new();
+        loc.add_bundle(ENGLISH, &[MAIN, SUB]).unwrap();
+
+        let mut tera = tera::Tera::new();
+
+        tera.register_function("fluent", loc);
+
+        let mut ctx = tera::Context::new();
+        ctx.insert("lang", "en");
+
+        let tera_r = tera
+            .render_str(r#"{{ fluent(key="test-key-a") }}"#, &ctx, false)
+            .unwrap();
+
+        assert_eq!(tera_r, String::from("Hello World"));
     }
 }

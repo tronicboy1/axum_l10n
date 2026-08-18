@@ -232,14 +232,14 @@ impl<'key, 'attribute> MessageKey for MessageAttribute<'key, 'attribute> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use unic_langid::langid;
 
-    const ENGLISH: LanguageIdentifier = langid!("en");
-    const JAPANESE: LanguageIdentifier = langid!("ja");
-    const MAIN: &str = "test_data/main.ftl";
-    const SUB: &str = "test_data/sub.ftl";
+    pub const ENGLISH: LanguageIdentifier = langid!("en");
+    pub const JAPANESE: LanguageIdentifier = langid!("ja");
+    pub const MAIN: &str = "test_data/main.ftl";
+    pub const SUB: &str = "test_data/sub.ftl";
 
     #[test]
     fn can_add_bundles() {
