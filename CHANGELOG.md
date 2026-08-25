@@ -21,6 +21,14 @@ straightforward as possible.
 
 ### Fixed
 
+## [0.6.1] - 2026-08-25
+
+Improve debugging.
+
+### Changed
+
+Improved debug feedback from tera when there is a localization key error.
+
 ## [0.6.0] - 2026-08-21
 
 Upgraded to tera v2.

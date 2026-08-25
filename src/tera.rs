@@ -46,7 +46,7 @@ impl tera::Function<tera::TeraResult<String>> for Localizer {
         } else {
             self.format_message_result(&lang_arg, ftl_key, Some(&fluent_args))
         }
-        .map_err(|err| tera::Error::chain("failed to format message", err))?;
+        .map_err(|err| tera::Error::message(err.to_string()))?;
 
         Ok(message)
     }
