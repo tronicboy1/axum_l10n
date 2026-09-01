@@ -8,6 +8,10 @@ use fluent::{
 use unic_langid::LanguageIdentifier;
 
 impl tera::Function<tera::TeraResult<String>> for Localizer {
+    fn is_safe(&self) -> bool {
+        true
+    }
+
     fn call(&self, kwargs: tera::Kwargs, state: &tera::State) -> tera::TeraResult<String> {
         let lang_arg = kwargs
             .get::<&str>("lang")?

@@ -21,6 +21,11 @@ straightforward as possible.
 
 ### Fixed
 
+
+## [0.6.2] - 2026-08-25
+
+Fixed issue where HTML in fluent templates is escaped.
+
 ## [0.6.1] - 2026-08-25
 
 Improve debugging.
