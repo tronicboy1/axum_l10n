@@ -26,18 +26,18 @@ let router = axum::Router::new()
       ));
 ```
 
-`RedirectMode::NoRedirect` accepts any language the client asks for; the default language is only used when no language could be extracted from the request. The redirect modes carry the languages the application serves under a sub-path as a `SupportedLanguages` set, which is non-empty by construction — so a redirect target always exists and the behavior is guaranteed by the types rather than by documentation:
+`RedirectMode::NoRedirect` accepts any language the client asks for; the default language is only used when no language could be extracted from the request. The redirect modes carry the languages the application serves under a sub-path as a `SupportedLanguages` set, which is guaranteed non-empty — so a redirect target always exists:
 
 ```rust
 let l10n_middleware = axum_l10n::LanguageIdentifierExtractorLayer::new(
         ENGLISH,
         axum_l10n::RedirectMode::RedirectToLanguageSubPath(
-            axum_l10n::SupportedLanguages::new(ENGLISH, [JAPANESE]),
+            axum_l10n::SupportedLanguages::new([ENGLISH, JAPANESE]),
         ),
     );
 ```
 
-A `SupportedLanguages` set can also be built from a runtime list with `TryFrom<Vec<LanguageIdentifier>>`, which fails on an empty vector.
+`SupportedLanguages::new` panics on an empty list; for lists built at runtime, `TryFrom<Vec<LanguageIdentifier>>` returns an error instead.
 
 For `RedirectMode::RedirectToFullLocaleSubPath` or `RedirectMode::RedirectToLanguageSubPath`, you must wrap this service/middleware around the entire
 axum app, as explained [here](https://docs.rs/axum/latest/axum/middleware/index.html#rewriting-request-uri-in-middleware).
@@ -48,7 +48,7 @@ When using the subpath redirect modes, you may want to exclude some folders from
 let l10n_middleware = axum_l10n::LanguageIdentifierExtractorLayer::new(
         JAPANESE,
         axum_l10n::RedirectMode::RedirectToLanguageSubPath(
-            axum_l10n::SupportedLanguages::new(JAPANESE, [ENGLISH]),
+            axum_l10n::SupportedLanguages::new([JAPANESE, ENGLISH]),
         ),
     )
     .excluded_paths(&["/api", "/assets", "/auth"]);

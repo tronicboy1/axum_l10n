@@ -14,36 +14,34 @@ mod tera;
 
 /// A non-empty set of supported languages, used by the redirect modes.
 ///
-/// Requiring the first language as a separate field makes an empty set
-/// unrepresentable, so the guarantee lives in the API instead of the
-/// documentation.
+/// The field is private and every way to build the set checks for emptiness,
+/// so holding a `SupportedLanguages` guarantees at least one language.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SupportedLanguages {
-    first: LanguageIdentifier,
-    rest: Vec<LanguageIdentifier>,
-}
+pub struct SupportedLanguages(Vec<LanguageIdentifier>);
 
 impl SupportedLanguages {
-    pub fn new(
-        first: LanguageIdentifier,
-        rest: impl IntoIterator<Item = LanguageIdentifier>,
-    ) -> Self {
-        Self {
-            first,
-            rest: rest.into_iter().collect(),
-        }
+    /// # Panics
+    /// Panics if `langs` is empty. Use [`TryFrom<Vec<LanguageIdentifier>>`]
+    /// for lists built at runtime.
+    pub fn new(langs: impl Into<Vec<LanguageIdentifier>>) -> Self {
+        let langs = langs.into();
+        assert!(
+            !langs.is_empty(),
+            "at least one supported language is required"
+        );
+        Self(langs)
     }
 
     fn supports(&self, ident: &LanguageIdentifier) -> bool {
-        std::iter::once(&self.first)
-            .chain(self.rest.iter())
+        self.0
+            .iter()
             .any(|supported| supported.language == ident.language)
     }
 }
 
 impl From<LanguageIdentifier> for SupportedLanguages {
     fn from(lang: LanguageIdentifier) -> Self {
-        SupportedLanguages::new(lang, [])
+        Self(vec![lang])
     }
 }
 
@@ -62,12 +60,11 @@ impl std::error::Error for EmptySupportedLanguages {}
 impl TryFrom<Vec<LanguageIdentifier>> for SupportedLanguages {
     type Error = EmptySupportedLanguages;
 
-    fn try_from(mut langs: Vec<LanguageIdentifier>) -> Result<Self, Self::Error> {
+    fn try_from(langs: Vec<LanguageIdentifier>) -> Result<Self, Self::Error> {
         if langs.is_empty() {
             return Err(EmptySupportedLanguages);
         }
-        let first = langs.remove(0);
-        Ok(SupportedLanguages::new(first, langs))
+        Ok(Self(langs))
     }
 }
 
@@ -118,7 +115,7 @@ macro_rules! builder_funcs {
         /// let layer = axum_l10n::LanguageIdentifierExtractorLayer::new(
         ///     ENGLISH,
         ///     axum_l10n::RedirectMode::RedirectToLanguageSubPath(
-        ///         axum_l10n::SupportedLanguages::new(ENGLISH, [JAPANESE]),
+        ///         axum_l10n::SupportedLanguages::new([ENGLISH, JAPANESE]),
         ///     ),
         /// ).excluded_paths(&["/.well-known", ])
         /// ```
@@ -399,7 +396,7 @@ mod tests {
     struct DummyInner;
 
     fn en_ja() -> SupportedLanguages {
-        SupportedLanguages::new(ENGLISH, [JAPANESE])
+        SupportedLanguages::new([ENGLISH, JAPANESE])
     }
 
     fn get_serv() -> LanguageIdentifierExtractor<DummyInner> {
@@ -563,6 +560,12 @@ mod tests {
         let ident = service.lang_code_from_headers(&headers).unwrap();
 
         assert_eq!(ident, "fr-FR".parse::<LanguageIdentifier>().unwrap());
+    }
+
+    #[test]
+    #[should_panic(expected = "at least one supported language is required")]
+    fn supported_languages_new_panics_on_empty_list() {
+        SupportedLanguages::new(Vec::new());
     }
 
     #[test]
