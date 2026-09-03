@@ -12,24 +12,86 @@ pub use fluent::Localizer;
 #[cfg(feature = "tera")]
 mod tera;
 
+/// A non-empty set of supported languages, used by the redirect modes.
+///
+/// The field is private and every way to build the set checks for emptiness,
+/// so holding a `SupportedLanguages` guarantees at least one language.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SupportedLanguages(Vec<LanguageIdentifier>);
+
+impl SupportedLanguages {
+    /// # Panics
+    /// Panics if `langs` is empty. Use [`TryFrom<Vec<LanguageIdentifier>>`]
+    /// for lists built at runtime.
+    pub fn new(langs: impl Into<Vec<LanguageIdentifier>>) -> Self {
+        let langs = langs.into();
+        assert!(
+            !langs.is_empty(),
+            "at least one supported language is required"
+        );
+        Self(langs)
+    }
+
+    fn supports(&self, ident: &LanguageIdentifier) -> bool {
+        self.0
+            .iter()
+            .any(|supported| supported.language == ident.language)
+    }
+}
+
+impl From<LanguageIdentifier> for SupportedLanguages {
+    fn from(lang: LanguageIdentifier) -> Self {
+        Self(vec![lang])
+    }
+}
+
+/// Error returned when building [`SupportedLanguages`] from an empty collection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EmptySupportedLanguages;
+
+impl std::fmt::Display for EmptySupportedLanguages {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "at least one supported language is required")
+    }
+}
+
+impl std::error::Error for EmptySupportedLanguages {}
+
+impl TryFrom<Vec<LanguageIdentifier>> for SupportedLanguages {
+    type Error = EmptySupportedLanguages;
+
+    fn try_from(langs: Vec<LanguageIdentifier>) -> Result<Self, Self::Error> {
+        if langs.is_empty() {
+            return Err(EmptySupportedLanguages);
+        }
+        Ok(Self(langs))
+    }
+}
+
 /// The redirect mode for the service.
+///
+/// The redirect variants carry the languages the application actually serves
+/// under a sub-path; [`SupportedLanguages`] cannot be empty, so a redirect
+/// target always exists. `NoRedirect` needs no list: it forwards whatever
+/// language the client asks for.
 #[derive(Debug, Clone)]
 pub enum RedirectMode {
-    /// Does not redirect, only adds the found locale from header
+    /// Does not redirect, only adds the locale found in the Accept-Language
+    /// header (any language the client asks for; the default language is used
+    /// when the header is missing or unparseable)
     NoRedirect,
-    /// Redirects to sub-path (/<lang>-<region>/*) if in list of supported Languages
+    /// Redirects to sub-path (/<lang>-<region>/*) if in the set of supported languages
     /// Ex. localhost:3000/lists -> localhost:3000/en-US/lists
-    RedirectToFullLocaleSubPath,
-    /// Redirects to sub-path (/<lang>/*) if in list of supported Languages
+    RedirectToFullLocaleSubPath(SupportedLanguages),
+    /// Redirects to sub-path (/<lang>/*) if in the set of supported languages
     /// Ex. localhost:3000/lists -> localhost:3000/en/lists
-    RedirectToLanguageSubPath,
+    RedirectToLanguageSubPath(SupportedLanguages),
 }
 
 #[derive(Debug, Clone)]
 pub struct LanguageIdentifierExtractor<S> {
     inner: S,
     default_lang: LanguageIdentifier,
-    supported_langs: Vec<LanguageIdentifier>,
     redirect_mode: RedirectMode,
     excluded_paths: Vec<String>,
     redirect_default_as_301: bool,
@@ -52,8 +114,9 @@ macro_rules! builder_funcs {
         /// ```ignore
         /// let layer = axum_l10n::LanguageIdentifierExtractorLayer::new(
         ///     ENGLISH,
-        ///     vec![ENGLISH, JAPANESE],
-        ///     axum_l10n::RedirectMode::RedirectToLanguageSubPath,
+        ///     axum_l10n::RedirectMode::RedirectToLanguageSubPath(
+        ///         axum_l10n::SupportedLanguages::new([ENGLISH, JAPANESE]),
+        ///     ),
         /// ).excluded_paths(&["/.well-known", ])
         /// ```
         pub fn excluded_paths(self, paths_to_exclude: &[&str]) -> Self {
@@ -78,16 +141,11 @@ macro_rules! builder_funcs {
 }
 
 impl<S> LanguageIdentifierExtractor<S> {
-    pub fn new(
-        inner: S,
-        supported_langs: &[LanguageIdentifier],
-        default_lang: &LanguageIdentifier,
-    ) -> Self {
+    pub fn new(inner: S, default_lang: &LanguageIdentifier) -> Self {
         Self {
             inner,
             default_lang: default_lang.to_owned(),
             redirect_mode: RedirectMode::NoRedirect,
-            supported_langs: supported_langs.to_owned(),
             excluded_paths: Vec::new(),
             redirect_default_as_301: false,
         }
@@ -145,11 +203,15 @@ impl<S> LanguageIdentifierExtractor<S> {
             })
     }
 
+    // Returns if the language is supported by the current redirect mode
     fn supported(&self, path_ident: &LanguageIdentifier) -> bool {
-        self.supported_langs
-            .iter()
-            .find(|ident| ident.language == path_ident.language)
-            .is_some()
+        match &self.redirect_mode {
+            RedirectMode::NoRedirect => true,
+            RedirectMode::RedirectToFullLocaleSubPath(supported_langs)
+            | RedirectMode::RedirectToLanguageSubPath(supported_langs) => {
+                supported_langs.supports(path_ident)
+            }
+        }
     }
 
     // Rewrites uri without the language code
@@ -159,8 +221,8 @@ impl<S> LanguageIdentifierExtractor<S> {
         ident: &LanguageIdentifier,
     ) -> Result<(), http::uri::InvalidUri> {
         let lang_code = match &self.redirect_mode {
-            RedirectMode::RedirectToFullLocaleSubPath => ident.to_string(),
-            RedirectMode::RedirectToLanguageSubPath => ident.language.to_string(),
+            RedirectMode::RedirectToFullLocaleSubPath(_) => ident.to_string(),
+            RedirectMode::RedirectToLanguageSubPath(_) => ident.language.to_string(),
             RedirectMode::NoRedirect => unreachable!(),
         };
 
@@ -181,8 +243,8 @@ impl<S> LanguageIdentifierExtractor<S> {
             self.default_lang.clone()
         };
         let ident_string = match self.redirect_mode {
-            RedirectMode::RedirectToFullLocaleSubPath => ident.to_string(),
-            RedirectMode::RedirectToLanguageSubPath => ident.language.to_string(),
+            RedirectMode::RedirectToFullLocaleSubPath(_) => ident.to_string(),
+            RedirectMode::RedirectToLanguageSubPath(_) => ident.language.to_string(),
             _ => unreachable!(),
         };
 
@@ -222,9 +284,8 @@ where
 
         let lang_ident = match &self.redirect_mode {
             RedirectMode::NoRedirect => self.lang_code_from_headers(headers),
-            RedirectMode::RedirectToLanguageSubPath | RedirectMode::RedirectToFullLocaleSubPath => {
-                self.lang_code_from_uri(req.uri())
-            }
+            RedirectMode::RedirectToLanguageSubPath(_)
+            | RedirectMode::RedirectToFullLocaleSubPath(_) => self.lang_code_from_uri(req.uri()),
         };
 
         match &self.redirect_mode {
@@ -238,7 +299,8 @@ where
 
                 Box::pin(self.inner.call(req))
             }
-            RedirectMode::RedirectToFullLocaleSubPath | RedirectMode::RedirectToLanguageSubPath => {
+            RedirectMode::RedirectToFullLocaleSubPath(_)
+            | RedirectMode::RedirectToLanguageSubPath(_) => {
                 if let Some(ident) = lang_ident {
                     // Remove lang code from path for matching in axum
                     let uri = req.uri_mut();
@@ -287,21 +349,15 @@ where
 #[derive(Debug, Clone)]
 pub struct LanguageIdentifierExtractorLayer {
     default_lang: LanguageIdentifier,
-    supported_langs: Vec<LanguageIdentifier>,
     redirect_mode: RedirectMode,
     excluded_paths: Vec<String>,
     redirect_default_as_301: bool,
 }
 
 impl LanguageIdentifierExtractorLayer {
-    pub fn new(
-        default_lang: LanguageIdentifier,
-        supported_langs: Vec<LanguageIdentifier>,
-        redirect_mode: RedirectMode,
-    ) -> Self {
+    pub fn new(default_lang: LanguageIdentifier, redirect_mode: RedirectMode) -> Self {
         Self {
             default_lang,
-            supported_langs,
             redirect_mode,
             excluded_paths: Vec::new(),
             redirect_default_as_301: false,
@@ -318,7 +374,6 @@ impl<S> Layer<S> for LanguageIdentifierExtractorLayer {
         LanguageIdentifierExtractor {
             inner,
             default_lang: self.default_lang.clone(),
-            supported_langs: self.supported_langs.clone(),
             redirect_mode: self.redirect_mode.clone(),
             excluded_paths: self.excluded_paths.clone(),
             redirect_default_as_301: self.redirect_default_as_301,
@@ -340,9 +395,12 @@ mod tests {
 
     struct DummyInner;
 
+    fn en_ja() -> SupportedLanguages {
+        SupportedLanguages::new([ENGLISH, JAPANESE])
+    }
+
     fn get_serv() -> LanguageIdentifierExtractor<DummyInner> {
-        let supported = vec![ENGLISH, JAPANESE];
-        LanguageIdentifierExtractor::new(DummyInner, &supported, &ENGLISH).redirect_default_as_301()
+        LanguageIdentifierExtractor::new(DummyInner, &ENGLISH).redirect_default_as_301()
     }
 
     #[test]
@@ -350,7 +408,7 @@ mod tests {
         let mut uri = "http://localhost:3000/en-US/lists".parse::<Uri>().unwrap();
 
         let mut service = get_serv();
-        service.redirect_mode = RedirectMode::RedirectToFullLocaleSubPath;
+        service.redirect_mode = RedirectMode::RedirectToFullLocaleSubPath(en_ja());
 
         let ident = LanguageIdentifier::from_str("en-US").unwrap();
 
@@ -364,7 +422,7 @@ mod tests {
         let mut uri = "http://localhost:3000/en/lists".parse::<Uri>().unwrap();
 
         let mut service = get_serv();
-        service.redirect_mode = RedirectMode::RedirectToLanguageSubPath;
+        service.redirect_mode = RedirectMode::RedirectToLanguageSubPath(en_ja());
 
         let ident = LanguageIdentifier::from_str("en-US").unwrap();
 
@@ -380,7 +438,7 @@ mod tests {
             .unwrap();
 
         let mut service = get_serv();
-        service.redirect_mode = RedirectMode::RedirectToLanguageSubPath;
+        service.redirect_mode = RedirectMode::RedirectToLanguageSubPath(en_ja());
 
         let ident = LanguageIdentifier::from_str("en-US").unwrap();
 
@@ -397,7 +455,7 @@ mod tests {
         let mut uri = "http://localhost:3000/en/?page=1".parse::<Uri>().unwrap();
 
         let mut service = get_serv();
-        service.redirect_mode = RedirectMode::RedirectToLanguageSubPath;
+        service.redirect_mode = RedirectMode::RedirectToLanguageSubPath(en_ja());
 
         let ident = LanguageIdentifier::from_str("en-US").unwrap();
 
@@ -416,7 +474,7 @@ mod tests {
             .unwrap();
 
         let mut service = get_serv();
-        service.redirect_mode = RedirectMode::RedirectToLanguageSubPath;
+        service.redirect_mode = RedirectMode::RedirectToLanguageSubPath(en_ja());
 
         let _ident = LanguageIdentifier::from_str("en-US").unwrap();
 
@@ -429,7 +487,8 @@ mod tests {
     fn can_get_supported_lang_code_from_uri() {
         let uri = "http://localhost:3000/ja/lists".parse::<Uri>().unwrap();
 
-        let service = get_serv();
+        let mut service = get_serv();
+        service.redirect_mode = RedirectMode::RedirectToLanguageSubPath(en_ja());
 
         let ident = service.lang_code_from_uri(&uri);
 
@@ -441,7 +500,8 @@ mod tests {
     fn unsupported_lang_code_from_uri() {
         let uri = "http://localhost:3000/de/lists".parse::<Uri>().unwrap();
 
-        let service = get_serv();
+        let mut service = get_serv();
+        service.redirect_mode = RedirectMode::RedirectToLanguageSubPath(en_ja());
 
         let ident = service.lang_code_from_uri(&uri);
 
@@ -488,6 +548,43 @@ mod tests {
 
         let target = "en-US".parse::<LanguageIdentifier>().unwrap();
         assert_eq!(ident.language, target.language)
+    }
+
+    #[test]
+    fn no_redirect_accepts_any_lang_from_headers() {
+        let mut headers = HeaderMap::new();
+        headers.insert("Accept-Language", HeaderValue::from_static("fr-FR"));
+
+        let service = get_serv();
+
+        let ident = service.lang_code_from_headers(&headers).unwrap();
+
+        assert_eq!(ident, "fr-FR".parse::<LanguageIdentifier>().unwrap());
+    }
+
+    #[test]
+    #[should_panic(expected = "at least one supported language is required")]
+    fn supported_languages_new_panics_on_empty_list() {
+        SupportedLanguages::new(Vec::new());
+    }
+
+    #[test]
+    fn supported_languages_cannot_be_built_from_empty_vec() {
+        let langs: Vec<LanguageIdentifier> = Vec::new();
+
+        assert_eq!(
+            SupportedLanguages::try_from(langs),
+            Err(EmptySupportedLanguages)
+        );
+    }
+
+    #[test]
+    fn supported_languages_from_vec_keeps_all_langs() {
+        let langs = SupportedLanguages::try_from(vec![ENGLISH, JAPANESE]).unwrap();
+
+        assert!(langs.supports(&ENGLISH));
+        assert!(langs.supports(&JAPANESE));
+        assert!(!langs.supports(&"de".parse::<LanguageIdentifier>().unwrap()));
     }
 
     #[test]

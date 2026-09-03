@@ -22,10 +22,22 @@ let router = axum::Router::new()
         }))
       .layer(axum_l10n::LanguageIdentifierExtractorLayer::new(
           ENGLISH,
-          vec![ENGLISH, JAPANESE],
           axum_l10n::RedirectMode::NoRedirect,
       ));
 ```
+
+`RedirectMode::NoRedirect` accepts any language the client asks for; the default language is only used when no language could be extracted from the request. The redirect modes carry the languages the application serves under a sub-path as a `SupportedLanguages` set, which is guaranteed non-empty — so a redirect target always exists:
+
+```rust
+let l10n_middleware = axum_l10n::LanguageIdentifierExtractorLayer::new(
+        ENGLISH,
+        axum_l10n::RedirectMode::RedirectToLanguageSubPath(
+            axum_l10n::SupportedLanguages::new([ENGLISH, JAPANESE]),
+        ),
+    );
+```
+
+`SupportedLanguages::new` panics on an empty list; for lists built at runtime, `TryFrom<Vec<LanguageIdentifier>>` returns an error instead.
 
 For `RedirectMode::RedirectToFullLocaleSubPath` or `RedirectMode::RedirectToLanguageSubPath`, you must wrap this service/middleware around the entire
 axum app, as explained [here](https://docs.rs/axum/latest/axum/middleware/index.html#rewriting-request-uri-in-middleware).
@@ -35,8 +47,9 @@ When using the subpath redirect modes, you may want to exclude some folders from
 ```rust
 let l10n_middleware = axum_l10n::LanguageIdentifierExtractorLayer::new(
         JAPANESE,
-        vec![JAPANESE, ENGLISH],
-        axum_l10n::RedirectMode::RedirectToLanguageSubPath,
+        axum_l10n::RedirectMode::RedirectToLanguageSubPath(
+            axum_l10n::SupportedLanguages::new([JAPANESE, ENGLISH]),
+        ),
     )
     .excluded_paths(&["/api", "/assets", "/auth"]);
 ```
