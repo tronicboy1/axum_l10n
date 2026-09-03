@@ -27,6 +27,16 @@ let router = axum::Router::new()
       ));
 ```
 
+The second argument of `new` is anything convertible into `SupportedLanguages`. Passing a `Vec` or slice restricts the supported languages to that list (an empty list matches nothing, so every request falls back to the default language). To accept every language the client asks for, pass `SupportedLanguages::All` explicitly:
+
+```rust
+let l10n_middleware = axum_l10n::LanguageIdentifierExtractorLayer::new(
+        ENGLISH,
+        axum_l10n::SupportedLanguages::All,
+        axum_l10n::RedirectMode::NoRedirect,
+    );
+```
+
 For `RedirectMode::RedirectToFullLocaleSubPath` or `RedirectMode::RedirectToLanguageSubPath`, you must wrap this service/middleware around the entire
 axum app, as explained [here](https://docs.rs/axum/latest/axum/middleware/index.html#rewriting-request-uri-in-middleware).
 

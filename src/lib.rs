@@ -12,6 +12,57 @@ pub use fluent::Localizer;
 #[cfg(feature = "tera")]
 mod tera;
 
+/// The languages the service accepts.
+///
+/// Makes the "accept everything" behavior explicit in the API instead of
+/// relying on a special meaning of an empty `Vec`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SupportedLanguages {
+    /// Every language is considered supported.
+    /// The default language is only used when no language could be extracted
+    /// from the request.
+    All,
+    /// Only the listed languages are supported; anything else falls back to
+    /// the default language. An empty list means no language matches, so
+    /// every request falls back to the default language.
+    Only(Vec<LanguageIdentifier>),
+}
+
+impl SupportedLanguages {
+    fn supports(&self, ident: &LanguageIdentifier) -> bool {
+        match self {
+            SupportedLanguages::All => true,
+            SupportedLanguages::Only(langs) => langs
+                .iter()
+                .any(|supported| supported.language == ident.language),
+        }
+    }
+}
+
+impl From<Vec<LanguageIdentifier>> for SupportedLanguages {
+    fn from(langs: Vec<LanguageIdentifier>) -> Self {
+        SupportedLanguages::Only(langs)
+    }
+}
+
+impl From<&[LanguageIdentifier]> for SupportedLanguages {
+    fn from(langs: &[LanguageIdentifier]) -> Self {
+        SupportedLanguages::Only(langs.to_vec())
+    }
+}
+
+impl From<&Vec<LanguageIdentifier>> for SupportedLanguages {
+    fn from(langs: &Vec<LanguageIdentifier>) -> Self {
+        SupportedLanguages::Only(langs.clone())
+    }
+}
+
+impl<const N: usize> From<[LanguageIdentifier; N]> for SupportedLanguages {
+    fn from(langs: [LanguageIdentifier; N]) -> Self {
+        SupportedLanguages::Only(langs.to_vec())
+    }
+}
+
 /// The redirect mode for the service.
 #[derive(Debug, Clone)]
 pub enum RedirectMode {
@@ -29,7 +80,7 @@ pub enum RedirectMode {
 pub struct LanguageIdentifierExtractor<S> {
     inner: S,
     default_lang: LanguageIdentifier,
-    supported_langs: Vec<LanguageIdentifier>,
+    supported_langs: SupportedLanguages,
     redirect_mode: RedirectMode,
     excluded_paths: Vec<String>,
     redirect_default_as_301: bool,
@@ -80,14 +131,14 @@ macro_rules! builder_funcs {
 impl<S> LanguageIdentifierExtractor<S> {
     pub fn new(
         inner: S,
-        supported_langs: &[LanguageIdentifier],
+        supported_langs: impl Into<SupportedLanguages>,
         default_lang: &LanguageIdentifier,
     ) -> Self {
         Self {
             inner,
             default_lang: default_lang.to_owned(),
             redirect_mode: RedirectMode::NoRedirect,
-            supported_langs: supported_langs.to_owned(),
+            supported_langs: supported_langs.into(),
             excluded_paths: Vec::new(),
             redirect_default_as_301: false,
         }
@@ -147,10 +198,7 @@ impl<S> LanguageIdentifierExtractor<S> {
 
     // Returns if the language is supported
     fn supported(&self, path_ident: &LanguageIdentifier) -> bool {
-        self.supported_langs
-            .iter()
-            // if the vec is empty, then return true
-            .all(|ident| ident.language != path_ident.language)
+        self.supported_langs.supports(path_ident)
     }
 
     // Rewrites uri without the language code
@@ -288,7 +336,7 @@ where
 #[derive(Debug, Clone)]
 pub struct LanguageIdentifierExtractorLayer {
     default_lang: LanguageIdentifier,
-    supported_langs: Vec<LanguageIdentifier>,
+    supported_langs: SupportedLanguages,
     redirect_mode: RedirectMode,
     excluded_paths: Vec<String>,
     redirect_default_as_301: bool,
@@ -297,12 +345,12 @@ pub struct LanguageIdentifierExtractorLayer {
 impl LanguageIdentifierExtractorLayer {
     pub fn new(
         default_lang: LanguageIdentifier,
-        supported_langs: Vec<LanguageIdentifier>,
+        supported_langs: impl Into<SupportedLanguages>,
         redirect_mode: RedirectMode,
     ) -> Self {
         Self {
             default_lang,
-            supported_langs,
+            supported_langs: supported_langs.into(),
             redirect_mode,
             excluded_paths: Vec::new(),
             redirect_default_as_301: false,
@@ -489,6 +537,43 @@ mod tests {
 
         let target = "en-US".parse::<LanguageIdentifier>().unwrap();
         assert_eq!(ident.language, target.language)
+    }
+
+    #[test]
+    fn all_supported_accepts_any_lang_code_from_uri() {
+        let uri = "http://localhost:3000/de/lists".parse::<Uri>().unwrap();
+
+        let mut service = get_serv();
+        service.supported_langs = SupportedLanguages::All;
+
+        let ident = service.lang_code_from_uri(&uri);
+
+        assert_eq!(ident, Some("de".parse::<LanguageIdentifier>().unwrap()));
+    }
+
+    #[test]
+    fn all_supported_accepts_any_lang_from_headers() {
+        let mut headers = HeaderMap::new();
+        headers.insert("Accept-Language", HeaderValue::from_static("fr-FR"));
+
+        let mut service = get_serv();
+        service.supported_langs = SupportedLanguages::All;
+
+        let ident = service.lang_code_from_headers(&headers).unwrap();
+
+        assert_eq!(ident, "fr-FR".parse::<LanguageIdentifier>().unwrap());
+    }
+
+    #[test]
+    fn empty_supported_list_matches_nothing() {
+        let uri = "http://localhost:3000/en/lists".parse::<Uri>().unwrap();
+
+        let mut service = get_serv();
+        service.supported_langs = SupportedLanguages::Only(Vec::new());
+
+        let ident = service.lang_code_from_uri(&uri);
+
+        assert!(ident.is_none());
     }
 
     #[test]
