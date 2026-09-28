@@ -15,8 +15,10 @@ mod tera;
 /// The redirect mode for the service.
 #[derive(Debug, Clone)]
 pub enum RedirectMode {
-    /// Does not redirect, only adds the found locale from header
+    /// Does not redirect, only adds the found locale from header if in supported languages.
     NoRedirect,
+    /// Does not redirect, adds the users requested locale regardless of support status.
+    NoRedirectIncludeUnsupported,
     /// Redirects to sub-path (/<lang>-<region>/*) if in list of supported Languages
     /// Ex. localhost:3000/lists -> localhost:3000/en-US/lists
     RedirectToFullLocaleSubPath,
@@ -113,7 +115,8 @@ impl<S> LanguageIdentifierExtractor<S> {
             })
     }
 
-    /// Extracts language code from Accept-Language header if available and asks for at least one supported language
+    /// Extracts language code from Accept-Language header if available and asks for at least one supported language.
+    /// When using RedirectMode::NoRedirect
     ///
     /// # Details
     /// All modern browsers send the Accept-Language header to tell a server what content it should send
@@ -127,11 +130,14 @@ impl<S> LanguageIdentifierExtractor<S> {
         accept_lang
             .parse::<LanguageIdentifier>()
             .ok()
-            .and_then(|ident| {
-                if self.supported(&ident) {
-                    Some(ident)
-                } else {
-                    None
+            .and_then(|ident| match self.redirect_mode {
+                RedirectMode::NoRedirectIncludeUnsupported => Some(ident),
+                _ => {
+                    if self.supported(&ident) {
+                        Some(ident)
+                    } else {
+                        None
+                    }
                 }
             })
             .or_else(|| {
@@ -161,7 +167,7 @@ impl<S> LanguageIdentifierExtractor<S> {
         let lang_code = match &self.redirect_mode {
             RedirectMode::RedirectToFullLocaleSubPath => ident.to_string(),
             RedirectMode::RedirectToLanguageSubPath => ident.language.to_string(),
-            RedirectMode::NoRedirect => unreachable!(),
+            RedirectMode::NoRedirect | RedirectMode::NoRedirectIncludeUnsupported => unreachable!(),
         };
 
         let new_uri = uri
@@ -221,14 +227,16 @@ where
         let headers = req.headers();
 
         let lang_ident = match &self.redirect_mode {
-            RedirectMode::NoRedirect => self.lang_code_from_headers(headers),
+            RedirectMode::NoRedirect | RedirectMode::NoRedirectIncludeUnsupported => {
+                self.lang_code_from_headers(headers)
+            }
             RedirectMode::RedirectToLanguageSubPath | RedirectMode::RedirectToFullLocaleSubPath => {
                 self.lang_code_from_uri(req.uri())
             }
         };
 
         match &self.redirect_mode {
-            &RedirectMode::NoRedirect => {
+            RedirectMode::NoRedirect | RedirectMode::NoRedirectIncludeUnsupported => {
                 let ident = match lang_ident {
                     Some(ident) => ident,
                     None => self.default_lang.clone(),
