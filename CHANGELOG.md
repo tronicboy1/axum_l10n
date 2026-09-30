@@ -21,6 +21,36 @@ straightforward as possible.
 
 ### Fixed
 
+## [0.7.0] - 2026-09-30
+
+Added new `RedirectMode` option.
+
+### Added
+
+- Added `RedirectMode::NoRedirectIncludeUnsupported` which allows users to insert any locale detected from headers into the axum extensions regardless of whether or not it is included in the supported languages registered.
+
+```rust
+use unic_langid::{langid, LanguageIdentifier};
+use axum::Extension;
+
+pub const ENGLISH: LanguageIdentifier = langid!("en");
+
+let router = axum::Router::new()
+      .route("/lists", get(|Extension(lang): Extension<LanguageIdentifier>|
+        async move {
+          Html(format!("Your language is: {}", lang.to_string()))
+        }))
+      .layer(axum_l10n::LanguageIdentifierExtractorLayer::new(
+          ENGLISH,
+          vec![],
+          axum_l10n::RedirectMode::NoRedirectIncludeUnsupported,
+      ));
+```
+
+### Changed
+
+### Fixed
+
 
 ## [0.6.2] - 2026-08-25
 
